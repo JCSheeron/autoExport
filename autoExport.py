@@ -35,7 +35,8 @@
 #       fileNamePrefix=...
 #       fileNameSuffix=...
 #    [ftArchPostProc]
-#       execPath=...
+#       script=...
+#       python_bin=...
 #
 #       2)  If there are any *.csv files in the unprocessed folder, this program will
 #           run ftArchPostProc on each *.csv file found, and then move the source
@@ -51,6 +52,10 @@ from datetime import datetime, time
 # join combines path stirngs in a smart way (i.e. will insert '/' if missing,
 # or remove a '/' if a join creates a repeat).
 from os.path import join
+from shutil import move # file rename/move
+
+# allow subprocess to be used for ftpp
+import subprocess
 
 # regex stuff
 import re
@@ -108,7 +113,8 @@ The configuation file has the following format:
     fileNamePrefix=...
     fileNameSuffix=...
  [ftArchPostProc]
-    execPath=...
+    script=...
+    python_bin=...
 
 If there are any *.csv files in the unprocessed folder, this program will
 run ftArchPostProc on each *.csv file found, and then move the source
@@ -137,7 +143,7 @@ Command line arguments are:
  -ce, --configEncoding (default 'UTF-8')
 
   -v, --verbose (default False). Provide diagnostic output. Otherwise, no output
-  is provided, other than the resulting file (good for running from scrips or 
+  is provided, other than the resulting file (good for running from scrips or
   automation.)
 
 """
@@ -331,20 +337,30 @@ file: \'' + args.configFile + '\'.')
 # Make sure the specified values are not empty strings or null.
 if config.has_section('ftArchPostProc'):
     # ftArchPostProc section is present
-    # execPath
-    if config.has_option('ftArchPostProc', 'execPath'):
-        ftppExecPath = config['ftArchPostProc']['execPath']
+    # ftpp script
+    if config.has_option('ftArchPostProc', 'script'):
+        ftppExecPath = config['ftArchPostProc']['script']
         if ftppExecPath is None or ftppExecPath == '':
             if args.verbose:
-                print('Configuration error: \'execPath\' option in the \
+                print('Configuration error: \'script\' option in the \
 \'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
             quit()
-        else:
-            # use os.path.join to add trailing slash if needed
-            ftppExecPath = join(ftppExecPath, '')
     else:
         if args.verbose:
-            print('Configuration error: No \'execPath\' option in the \
+            print('Configuration error: No \'script\' option in the \
+\'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
+        quit()
+    # ftpp python_bin
+    if config.has_option('ftArchPostProc', 'python_bin'):
+        ftppPythonBin = config['ftArchPostProc']['python_bin']
+        if ftppPythonBin is None or ftppPythonBin == '':
+            if args.verbose:
+                print('Configuration error: \'python_bin\' option in the \
+\'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
+            quit()
+    else:
+        if args.verbose:
+            print('Configuration error: No \'python_bin\' option in the \
 \'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
         quit()
 else:
@@ -353,6 +369,8 @@ else:
         print('Configuration error: No \'ftArchPostProc\' section in the configuration \
 file: \'' + args.configFile + '\'.')
     quit()
+
+# print the stuff from the config file if in verbose mode
 if args.verbose:
     print('The following was retrieved from the configuration file \'' + args.configFile + '\':')
     print('[rawFiles] unprocessedPath: ' + unprocessedPath)
@@ -362,7 +380,8 @@ if args.verbose:
     print('[exportFile] destinationPath: ' + destinationPath)
     print('[exportFile] fileNamePrefix: ' + exportFileNamePrefix)
     print('[exportFile] fileNameSuffix: ' + exportFileNameSuffix)
-    print('[ftArchPostProc] execPath: ' + ftppExecPath)
+    print('[ftArchPostProc] script: ' + ftppExecPath)
+    print('[ftArchPostProc] python_bin: ' + ftppPythonBin)
 
 # **** Check the unprocessed path for files which match the naming pattern:
 #     prefix + 0 or more characters or spaces + suffix
@@ -378,11 +397,27 @@ for filename in listFiles(unprocessedPath):
         coreName = trimPrefixSuffix(filename, rawFileNamePrefix, rawFileNameSuffix)
         # now construct the destination file name from the export prefix + core + suffix
         destFileName = exportFileNamePrefix + coreName + exportFileNameSuffix
-        # TODO: Activate ftpp environment (once if needed)
-        # TODO: Run ftpp
-        # TODO: Deactivate ftpp environment (once if activated)
-        print(filename)
-        print(destFileName)
+        # Run ftpp in its virtual environment as a subprocess
+        # First, create a list of arguments, and then call it
+        ftppArgs = []
+        # Use the -a, -n, or -t file types/foramts for ftpp depending on passed in argument
+        if args.a:
+            ftppArgs.append("-a")
+        elif args.n:
+            ftppArgs.append("-n")
+        elif args.t:
+            ftppArgs.append("-t")
+        # Append the input and output file names. Note these are positional arguments in ftpp,
+        # so the order is important.
+        ftppArgs.append(unprocessedPath + filename)
+        ftppArgs.append(destinationPath + destFileName)
+        try:
+            # run ftpp in a sub-process. communicate() runs the subprocess sequentially (synchronously)
+            subprocess.Popen([ftppPythonBin, ftppExecPath] + ftppArgs).communicate()
+            # if we get here, ftpp run. Move the raw file from the unprocessed folder to the processed folder.
+            move(unprocessedPath + filename, processedPath + filename)
+        except:
+            pass # move along to the next file
 
 if args.verbose:
     # get end processing time
