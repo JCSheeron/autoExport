@@ -70,6 +70,9 @@ import configparser
 # arg parser
 import argparse
 
+#shell lexical parser -- used to proces command line arguments from the config file
+import shlex
+
 
 # user libraries
 # Note: May need PYTHONPATH (set in ~/.profile?) to be set depending
@@ -320,12 +323,19 @@ if config.has_section('ftArchPostProc'):
     # ftArchPostProc section is present
     # ftpp clArgs -- command line arguments
     if config.has_option('ftArchPostProc', 'clArgs'):
-        ftppClArgs = config['ftArchPostProc']['clArgs']
-        if ftppClArgs is None or ftppClArgs == '':
+        argStr = config['ftArchPostProc']['clArgs']
+        if argStr is None or argStr == '':
             if args.verbose:
                 print('Configuration error: \'clArgs\' option in the \
 \'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
             quit()
+        else:
+            # argStr section is present, and option has something in it.
+            # Use shlex to parse the config info like the shell would
+            ftppClArgs = shlex.split(argStr)
+            print("*****")
+            print(ftppClArgs)
+            print("*****")
     else:
         if args.verbose:
             print('Configuration error: No \'clArgs\' option in the \
@@ -374,7 +384,7 @@ if args.verbose:
     print('[exportFile] destinationPath: ' + destinationPath)
     print('[exportFile] fileNamePrefix: ' + exportFileNamePrefix)
     print('[exportFile] fileNameSuffix: ' + exportFileNameSuffix)
-    print('[ftArchPostProc] clArgs (command line arguments): ' + ftppClArgs)
+    print('[ftArchPostProc] clArgs (command line arguments): ' + argStr)
     print('[ftArchPostProc] script: ' + ftppExecPath)
     print('[ftArchPostProc] python_bin: ' + ftppPythonBin)
 
@@ -395,26 +405,24 @@ for filename in listFiles(unprocessedPath):
         # Run ftpp in its virtual environment as a subprocess
         # First, create a list of arguments, and then call it
         # Besides the input and output file names, the command line arguments come
-        # from the configuraiton file, and were pulled out in ftppClArgs above.
+        # from the configuraiton file, and were pulled out into ftppClArgs above.
+        # The Popen subprocess call expects a command as a list with the command first
+        # followed by arguments, which in this case has the following pattern:
+        # python3 ftPostProc.py arg1, arg2 ...
         ftppArgs = []
         ftppArgs.append(ftppPythonBin)
         ftppArgs.append(ftppExecPath)
-        # append the command line arguments from the configuraiton file.
-        ftppArgs.append(ftppClArgs)
+        # append the command line arguments from the configuraiton file as list elements.
+        ftppArgs.extend(ftppClArgs)
         # Append the input and output file names. Note these are positional arguments in ftpp,
         # so the order is important.
         ftppArgs.append(unprocessedPath + filename)
         ftppArgs.append(destinationPath + destFileName)
-        print('****')
-        print (ftppArgs)
-        print (ftppPythonBin)
-        print (ftppExecPath)
-        print('****')
         try:
             # run ftpp in a sub-process. communicate() runs the subprocess sequentially (synchronously)
             subprocess.Popen(ftppArgs).communicate()
             # if we get here, ftpp rann. Move the raw file from the unprocessed folder to the processed folder.
-            #move(unprocessedPath + filename, processedPath + filename)
+            move(unprocessedPath + filename, processedPath + filename)
         except:
             pass # move along to the next file
 
