@@ -22,6 +22,9 @@
 #           b. The raw file processed path
 #           c. The destination path of the created file
 #           d. The file name parameters of the created file (prefix, data code, suffix)
+#           e. Command line arguments to use when calling ftArchPostProc
+#           f. Which script file to use for ftArchPostProc
+#           g. Which python binary to use when running ftArchPostProc
 #
 # TODO: Update INI Desc
 #   The configuation file has the following format:
@@ -35,6 +38,7 @@
 #       fileNamePrefix=...
 #       fileNameSuffix=...
 #    [ftArchPostProc]
+#       clArgs=...
 #       script=...
 #       python_bin=...
 #
@@ -126,18 +130,6 @@ Regarding file names:
         prefix_datecode_suffix
 
 Command line arguments are:
- -t, (required and mutually exclusive with -a and -n).  Input file
- is a historical trend export file.  The format is:
-     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2 Value ...
-
- -a (required and mutually exclusive with -t and -n). Input file is a
- archive export file. The format is:
-     TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
-
- -n (required and mutually exclusive with -t and -a). Input file is a time
- normalized export file.  The format is:
-     Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
-
  -c, --configFile (default 'autoExportConfig.ini')
 
  -ce, --configEncoding (default 'UTF-8')
@@ -160,14 +152,6 @@ parser.add_argument('-ce', '--configEncoding', default='UTF-8', metavar='', \
                    help='Config file encoding. Default is UTF-8.')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, \
                     help='Increase output messages.')
-# add -t and -a as a required, but mutually exclusive group
-typegroup = parser.add_mutually_exclusive_group(required=True)
-typegroup.add_argument('-t',  action='store_true', default=False, \
-                    help='Historical trend input file type (format).')
-typegroup.add_argument('-a', action='store_true', default=False, \
-                    help='Archive data input file type (format).')
-typegroup.add_argument('-n', action='store_true', default=False, \
-                    help='Time normalized input file type (format).')
 # parse the arguments
 args = parser.parse_args()
 
@@ -176,9 +160,6 @@ args = parser.parse_args()
 # args.configFile       string   Optional. Default 'autoExportConfig.ini'
 # args.configEncoding   string   Optional. Default 'UTF-8'
 # args.verbose          True/False Increase output messaging
-# args.t                True/False Historical trend input file type when set
-# args.a                True/False Archive data input file type when set
-# args.n                True/False Time Normalized input file type when set.
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
 
@@ -337,6 +318,19 @@ file: \'' + args.configFile + '\'.')
 # Make sure the specified values are not empty strings or null.
 if config.has_section('ftArchPostProc'):
     # ftArchPostProc section is present
+    # ftpp clArgs -- command line arguments
+    if config.has_option('ftArchPostProc', 'clArgs'):
+        ftppClArgs = config['ftArchPostProc']['clArgs']
+        if ftppClArgs is None or ftppClArgs == '':
+            if args.verbose:
+                print('Configuration error: \'clArgs\' option in the \
+\'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
+            quit()
+    else:
+        if args.verbose:
+            print('Configuration error: No \'clArgs\' option in the \
+\'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
+        quit()
     # ftpp script
     if config.has_option('ftArchPostProc', 'script'):
         ftppExecPath = config['ftArchPostProc']['script']
@@ -380,6 +374,7 @@ if args.verbose:
     print('[exportFile] destinationPath: ' + destinationPath)
     print('[exportFile] fileNamePrefix: ' + exportFileNamePrefix)
     print('[exportFile] fileNameSuffix: ' + exportFileNameSuffix)
+    print('[ftArchPostProc] clArgs (command line arguments): ' + ftppClArgs)
     print('[ftArchPostProc] script: ' + ftppExecPath)
     print('[ftArchPostProc] python_bin: ' + ftppPythonBin)
 
@@ -399,23 +394,27 @@ for filename in listFiles(unprocessedPath):
         destFileName = exportFileNamePrefix + coreName + exportFileNameSuffix
         # Run ftpp in its virtual environment as a subprocess
         # First, create a list of arguments, and then call it
+        # Besides the input and output file names, the command line arguments come
+        # from the configuraiton file, and were pulled out in ftppClArgs above.
         ftppArgs = []
-        # Use the -a, -n, or -t file types/foramts for ftpp depending on passed in argument
-        if args.a:
-            ftppArgs.append("-a")
-        elif args.n:
-            ftppArgs.append("-n")
-        elif args.t:
-            ftppArgs.append("-t")
+        ftppArgs.append(ftppPythonBin)
+        ftppArgs.append(ftppExecPath)
+        # append the command line arguments from the configuraiton file.
+        ftppArgs.append(ftppClArgs)
         # Append the input and output file names. Note these are positional arguments in ftpp,
         # so the order is important.
         ftppArgs.append(unprocessedPath + filename)
         ftppArgs.append(destinationPath + destFileName)
+        print('****')
+        print (ftppArgs)
+        print (ftppPythonBin)
+        print (ftppExecPath)
+        print('****')
         try:
             # run ftpp in a sub-process. communicate() runs the subprocess sequentially (synchronously)
-            subprocess.Popen([ftppPythonBin, ftppExecPath] + ftppArgs).communicate()
-            # if we get here, ftpp run. Move the raw file from the unprocessed folder to the processed folder.
-            move(unprocessedPath + filename, processedPath + filename)
+            subprocess.Popen(ftppArgs).communicate()
+            # if we get here, ftpp rann. Move the raw file from the unprocessed folder to the processed folder.
+            #move(unprocessedPath + filename, processedPath + filename)
         except:
             pass # move along to the next file
 
