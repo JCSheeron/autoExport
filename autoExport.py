@@ -26,26 +26,23 @@
 #           f. Which script file to use for ftArchPostProc
 #           g. Which python binary to use when running ftArchPostProc
 #
-# TODO: Update INI Desc
-#   The configuation file has the following format:
-#    [rawFiles]
-#        unprocessedPath=/.../...
-#        processedPath=/.../...
-#        fileNamePrefix=...
-#        fileNameSuffix=...
-#    [exportFile]
-#       destinationPath=/.../...
-#       fileNamePrefix=...
-#       fileNameSuffix=...
-#    [ftArchPostProc]
-#       clArgs=...
-#       script=...
-#       python_bin=...
+# The script using this file will assume this stucture:
+# [rawFiles]
+#     unprocessedPath=/.../...   Source (raw) file path
+#     processedPath=/.../...     Where to put the source file when done
+# [exportFile]
+#    destinationPath=/.../...    Destination file path (the exportable file)
+#    fileNamePrefix=...
+#    fileNameSuffix=...
+# [ftArchPostProc]
+#    clArgs=...                  Command line arguments
+#    scrptPath=/.../...          Which ftPostProc to run
+#    python_bin=/.../...         Which python to run
 #
-#       2)  If there are any *.csv files in the unprocessed folder, this program will
-#           run ftArchPostProc on each *.csv file found, and then move the source
-#           file to the procesed folder.  If there are no *.csv files in the
-#           unprocessed folder, this program does nothing.
+#   2)  If there are any *.csv files in the unprocessed folder, this program will
+#       run ftArchPostProc on each *.csv file found, and then move the source
+#       file to the procesed folder.  If there are no *.csv files in the
+#       unprocessed folder, this program does nothing.
 #
 # imports
 #
@@ -104,29 +101,31 @@ program is run.
 The program will read in a config file. The file is either specified by
 the -c/--configFile command line argument, or defaults to "autoExportconfig.ini"
 if not specified.  The config file specifies:
-        a. The raw file unprocessed path
-        b. The raw file processed path
-        c. The destination path of the created file
-        d. The file name parameters of the created file (prefix, data code, suffix)
+    a. The raw file unprocessed path
+    b. The raw file processed path
+    c. The destination path of the created file
+    d. The file name parameters of the created file (prefix, data code, suffix)
+    e. Command line arguments to use when calling ftArchPostProc
+    f. Which script file to use for ftArchPostProc
+    g. Which python binary to use when running ftArchPostProc
 
-The configuation file has the following format:
+ The script using this file will assume this stucture:
  [rawFiles]
-     unprocessedPath=/.../...
-     processedPath=/.../...
+     unprocessedPath=/.../...   Source (raw) file path
+     processedPath=/.../...     Where to put the source file when done
+ [exportFile]
+     destinationPath=/.../...    Destination file path (the exportable file)
      fileNamePrefix=...
      fileNameSuffix=...
- [exportFile]
-    destinationPath=/.../...
-    fileNamePrefix=...
-    fileNameSuffix=...
- [ftArchPostProc]
-    script=...
-    python_bin=...
+  [ftArchPostProc]
+     clArgs=...                  Command line arguments
+     scrptPath=/.../...          Which ftPostProc to run
+     python_bin=/.../...         Which python to run
 
-If there are any *.csv files in the unprocessed folder, this program will
-run ftArchPostProc on each *.csv file found, and then move the source
-file to the procesed folder.  If there are no *.csv files in the
-unprocessed folder, this program does nothing and exits.
+ If there are any *.csv files in the unprocessed folder, this program will
+ run ftArchPostProc on each *.csv file found, and then move the source
+ file to the procesed folder.  If there are no *.csv files in the
+ unprocessed folder, this program does nothing.
 
 Regarding file names:
     The source file is expected to have a file naming convention:
@@ -333,9 +332,6 @@ if config.has_section('ftArchPostProc'):
             # argStr section is present, and option has something in it.
             # Use shlex to parse the config info like the shell would
             ftppClArgs = shlex.split(argStr)
-            print("*****")
-            print(ftppClArgs)
-            print("*****")
     else:
         if args.verbose:
             print('Configuration error: No \'clArgs\' option in the \
