@@ -35,14 +35,30 @@
 #    fileNamePrefix=...
 #    fileNameSuffix=...
 # [ftArchPostProc]
-#    clArgs=...                  Command line arguments
+#    clArgs=...                  Command line arguments. Ignored if -a/--clArgs cmd line arg is specified.
 #    scrptPath=/.../...          Which ftPostProc to run
 #    python_bin=/.../...         Which python to run
 #
-#   2)  If there are any *.csv files in the unprocessed folder, this program will
-#       run ftArchPostProc on each *.csv file found, and then move the source
-#       file to the procesed folder.  If there are no *.csv files in the
-#       unprocessed folder, this program does nothing.
+#   2) The command line argument of -a/--clArgs is used to pass through arguments to ftArchPostProc.
+#      Note that if the -a argument is used, the config file section, clArgs, is ignored.
+#
+#   3) If there are any *.csv files in the unprocessed folder, this program will
+#      run ftArchPostProc on each *.csv file found, and then move the source
+#      file to the procesed folder.  If there are no *.csv files in the
+#      unprocessed folder, this program does nothing.
+#
+# **** Command line arguments
+#   -a/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
+#                       over clArgs in the config file. The later is ignored if this argument is specified.
+#
+#   -c/--configFile     which config file to use. Looks for and uses autExportconfig.ini in the same path
+#                       as the executable if none is specified.
+#
+#   -ce, --configEncoding (default 'UTF-8')
+#
+#   -v/--verbose        (default False). Provide diagnostic output. Otherwise, no output
+#                       is provided, other than the resulting file (good for running from scrips or
+#                       automation.)
 #
 # imports
 #
@@ -118,7 +134,7 @@ if not specified.  The config file specifies:
      fileNamePrefix=...
      fileNameSuffix=...
   [ftArchPostProc]
-     clArgs=...                  Command line arguments
+     clArgs=...                  Command line arguments. Ignored if -a/--clArgs is specified
      scrptPath=/.../...          Which ftPostProc to run
      python_bin=/.../...         Which python to run
 
@@ -132,18 +148,24 @@ Regarding file names:
         prefix_datecode_suffix
 
 Command line arguments are:
- -c, --configFile (default 'autoExportConfig.ini')
+ -a/--clArgs            command line arguments to pass through to ftArchPostProc. Takes priority
+                        over clArgs in the config file. The later is ignored if this argument is specified.
 
- -ce, --configEncoding (default 'UTF-8')
+ -c/--configFile        (default 'autoExportConfig.ini')
 
-  -v, --verbose (default False). Provide diagnostic output. Otherwise, no output
-  is provided, other than the resulting file (good for running from scrips or
-  automation.)
+ -ce/--configEncoding   (default 'UTF-8')
+
+
+  -v/--verbose          (default False). Provide diagnostic output. Otherwise, no output
+                        is provided, other than the resulting file (good for running from scrips or
+                        automation.)
 
 """
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, \
                                  description=descrStr, epilog=eplStr)
+parser.add_argument('-a', '--clArgs', default=None, metavar='', \
+                   help='Command line arguments to pass through to ftArchPostProc.')
 parser.add_argument('-c', '--configFile', default='autoExportConfig.ini', metavar='', \
                    help='Config file. Default is autoExportConfig.ini. A list of files \
 may be specified ([\'file1.ini\',\'file2.ini\',...]) if the configuration is \
@@ -158,7 +180,8 @@ parser.add_argument('-v', '--verbose', action='store_true', default=False, \
 args = parser.parse_args()
 
 # At this point, the arguments will be:
-# Argument          Values       Description
+# Argument              Values   Description
+# args.clArgs           string   Optionsl. Default None
 # args.configFile       string   Optional. Default 'autoExportConfig.ini'
 # args.configEncoding   string   Optional. Default 'UTF-8'
 # args.verbose          True/False Increase output messaging
@@ -321,21 +344,32 @@ file: \'' + args.configFile + '\'.')
 if config.has_section('ftArchPostProc'):
     # ftArchPostProc section is present
     # ftpp clArgs -- command line arguments
-    if config.has_option('ftArchPostProc', 'clArgs'):
+    if config.has_option('ftArchPostProc', 'clArgs') and args.clArgs is not None and args.clArgs != '':
+        if args.verbose:
+            print('Note: The \'clArgs\' option in the \
+\'ftArchPostProc\' section was found, but will be ignored becuase the command line argument \
+-a/--clArgs was specified. Configuration file: \'' + args.configFile + '\'.')
+        ftppClArgs = args.clArgs
+    elif config.has_option('ftArchPostProc', 'clArgs') and (args.clArgs is None or args.clArgs == ''):
         argStr = config['ftArchPostProc']['clArgs']
-        if argStr is None or argStr == '':
+        if (argStr is None or argStr == ''): 
             if args.verbose:
                 print('Configuration error: \'clArgs\' option in the \
 \'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
             quit()
         else:
-            # argStr section is present, and option has something in it.
+            # argStr config section is present, and option has something in it,
+            # and args.clArgs is not specified (None or empty string)
             # Use shlex to parse the config info like the shell would
             ftppClArgs = shlex.split(argStr)
-    else:
+    elif not config.has_option('ftArchPostProc', 'clArgs') and args.clArgs is not None and args.clArgs != '':
         if args.verbose:
-            print('Configuration error: No \'clArgs\' option in the \
-\'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
+            print('The command line argument -a/--clArgs was specified: \'' + args.clArgs + '\'.')
+        ftppClArgs = args.clArgs
+    else :
+        if args.verbose:
+            print('Configuration error: No arguments specified with the -a/--clArgs command line \
+option, and there is no  \'clArgs\' option in the \'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
         quit()
     # ftpp script
     if config.has_option('ftArchPostProc', 'script'):
