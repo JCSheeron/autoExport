@@ -45,22 +45,29 @@
 #      then a space must be prepended, or the argument won\'t be properly passed'.)
 #
 #   3) If there are any *.csv files in the unprocessed folder, this program will
-#      run ftArchPostProc on each *.csv file found, and then move the source
-#      file to the procesed folder.  If there are no *.csv files in the
+#      run ftArchPostProc on each *.csv file found. If there are no *.csv files in the
 #      unprocessed folder, this program does nothing.
 #
-# **** Command line arguments
-#   -args/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
-#                       over clArgs in the config file. The later is ignored if this argument is specified.
+#   4) After processing any *.csv files in the unprocesed folder, the program will then move the source
+#      file to the procesed folder, as long as the -s/--srcFileHold command line option is not used.
+#      If the -s/--srcFileHold command line option is used, the source file is not moved.  This allows
+#      the same source file to be operated on in subsequent calls, which is useful if the same file needs
+#      to be processed in different ways.
 #
-#   -c/--configFile     which config file to use. Looks for and uses autExportconfig.ini in the same path
-#                       as the executable if none is specified.
+# **** Command line arguments
+#   -args, --clArgs       command line arguments to pass through to ftArchPostProc. Takes priority
+#                         over clArgs in the config file. The later is ignored if this argument is specified.
+#
+#   -c, --configFile      which config file to use. Looks for and uses autExportconfig.ini in the same path
+#                         as the executable if none is specified.
 #
 #   -ce, --configEncoding (default 'UTF-8')
 #
-#   -v/--verbose        (default False). Provide diagnostic output. Otherwise, no output
-#                       is provided, other than the resulting file (good for running from scrips or
-#                       automation.)
+#   -s, --srcFileHold     (default False) If used, do not move source file after processing
+#
+#   -v, --verbose         (default False). Provide diagnostic output. Otherwise, no output
+#                         is provided, other than the resulting file (good for running from scrips or
+#                         automation.)
 #
 # imports
 #
@@ -127,40 +134,46 @@ if not specified.  The config file specifies:
     f. Which script file to use for ftArchPostProc
     g. Which python binary to use when running ftArchPostProc
 
- The script using this file will assume this stucture:
- [rawFiles]
-     unprocessedPath=/.../...   Source (raw) file path
-     processedPath=/.../...     Where to put the source file when done
- [exportFile]
-     destinationPath=/.../...    Destination file path (the exportable file)
-     fileNamePrefix=...
-     fileNameSuffix=...
-  [ftArchPostProc]
-     clArgs=...                  Command line arguments. Ignored if -args/--clArgs is specified
-     scrptPath=/.../...          Which ftPostProc to run
-     python_bin=/.../...         Which python to run
+The script using this file will assume this stucture:
+[rawFiles]
+    unprocessedPath=/.../...   Source (raw) file path
+    processedPath=/.../...     Where to put the source file when done
+[exportFile]
+    destinationPath=/.../...    Destination file path (the exportable file)
+    fileNamePrefix=...
+    fileNameSuffix=...
+ [ftArchPostProc]
+    clArgs=...                  Command line arguments. Ignored if -args/--clArgs is specified
+    scrptPath=/.../...          Which ftPostProc to run
+    python_bin=/.../...         Which python to run
 
- If there are any *.csv files in the unprocessed folder, this program will
- run ftArchPostProc on each *.csv file found, and then move the source
- file to the procesed folder.  If there are no *.csv files in the
- unprocessed folder, this program does nothing.
+If there are any *.csv files in the unprocessed folder, this program will
+run ftArchPostProc on each *.csv file found. If there are no *.csv files in the
+unprocessed folder, this program does nothing.
+
+After processing any *.csv files in the unprocesed folder, the program will then move the source
+file to the procesed folder, as long as the -s command line option is used.  If the -s
+command line option is used, the source file is not moved.  This allows the same source file
+to be operated on in subsequent calls, which is useful if the same file needs to be processed
+in different ways.
 
 Regarding file names:
     The source file is expected to have a file naming convention:
         prefix_datecode_suffix
 
 Command line arguments are:
- -args/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
-                        over clArgs in the config file. The later is ignored if this argument is specified.
+ -args, --clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
+                         over clArgs in the config file. The later is ignored if this argument is specified.
 
- -c/--configFile        (default 'autoExportConfig.ini')
+ -c, --configFile        (default 'autoExportConfig.ini')
 
- -ce/--configEncoding   (default 'UTF-8')
+ -ce, --configEncoding   (default 'UTF-8')
 
+ -s, --srcFileHold       (default False) If used, do not move source file after processing
 
-  -v/--verbose          (default False). Provide diagnostic output. Otherwise, no output
-                        is provided, other than the resulting file (good for running from scrips or
-                        automation.)
+  -v, --verbose          (default False). Provide diagnostic output. Otherwise, no output
+                         is provided, other than the resulting file (good for running from scrips or
+                         automation.)
 
 """
 
@@ -178,6 +191,8 @@ information, so if keys are repeated, the key will have the value it had in the 
 last file read.')
 parser.add_argument('-ce', '--configEncoding', default='UTF-8', metavar='', \
                    help='Config file encoding. Default is UTF-8.')
+parser.add_argument('-s', '--srcFileHold', action='store_true', default=False, \
+                   help='Do not move the source file after processing.')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, \
                     help='Increase output messages.')
 # parse the arguments
@@ -188,10 +203,11 @@ args = parser.parse_args()
 # args.clArgs           string   Optionsl. Default None
 # args.configFile       string   Optional. Default 'autoExportConfig.ini'
 # args.configEncoding   string   Optional. Default 'UTF-8'
+# args.srcFileHold      True/False Default False
 # args.verbose          True/False Increase output messaging
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
-print(args.clArgs)
+print(args)
 if args.verbose:
     print('**** Begin Processing ****')
     # get start processing time
@@ -459,8 +475,10 @@ for filename in listFiles(unprocessedPath):
         try:
             # run ftpp in a sub-process. communicate() runs the subprocess sequentially (synchronously)
             subprocess.Popen(ftppArgs).communicate()
-            # if we get here, ftpp rann. Move the raw file from the unprocessed folder to the processed folder.
-            move(unprocessedPath + filename, processedPath + filename)
+            # if we get here, ftpp rann. As long as the -s/--srcFileHold command line option is
+            # false (default) move the raw file from the unprocessed folder to the processed folder.
+            if not args.srcFileHold:
+                move(unprocessedPath + filename, processedPath + filename)
         except:
             pass # move along to the next file
 
