@@ -35,12 +35,14 @@
 #    fileNamePrefix=...
 #    fileNameSuffix=...
 # [ftArchPostProc]
-#    clArgs=...                  Command line arguments. Ignored if -a/--clArgs cmd line arg is specified.
+#    clArgs=...                  Command line arguments. Ignored if -args/--clArgs cmd line arg is specified.
 #    scrptPath=/.../...          Which ftPostProc to run
 #    python_bin=/.../...         Which python to run
 #
-#   2) The command line argument of -a/--clArgs is used to pass through arguments to ftArchPostProc.
-#      Note that if the -a argument is used, the config file section, clArgs, is ignored.
+#   2) The command line argument of -args/--clArgs is used to pass through arguments to ftArchPostProc.
+#      Note that if the -args/--clArgs argument is used, the config file section, clArgs, is ignored.
+#      Note, due to how arguments are parsed, if a single argument is to be passed ('-a' for example)
+#      then a space must be prepended, or the argument won\'t be properly passed'.)
 #
 #   3) If there are any *.csv files in the unprocessed folder, this program will
 #      run ftArchPostProc on each *.csv file found, and then move the source
@@ -48,7 +50,7 @@
 #      unprocessed folder, this program does nothing.
 #
 # **** Command line arguments
-#   -a/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
+#   -args/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
 #                       over clArgs in the config file. The later is ignored if this argument is specified.
 #
 #   -c/--configFile     which config file to use. Looks for and uses autExportconfig.ini in the same path
@@ -67,7 +69,7 @@ from datetime import datetime, time
 
 # os file related
 # join combines path stirngs in a smart way (i.e. will insert '/' if missing,
-# or remove a '/' if a join creates a repeat).
+# or remove a '/' if a  join creates a repeat).
 from os.path import join
 from shutil import move # file rename/move
 
@@ -94,7 +96,7 @@ from bpsFile import listFiles
 from bpsString import trimPrefixSuffix
 
 # **** argument parsing
-# define the arguments
+# define the arguments 
 # create an epilog string to further describe the input file
 # TODO: Update INI Desc
 eplStr="""Python program which uses ftArchPostProc to create csv files for
@@ -134,7 +136,7 @@ if not specified.  The config file specifies:
      fileNamePrefix=...
      fileNameSuffix=...
   [ftArchPostProc]
-     clArgs=...                  Command line arguments. Ignored if -a/--clArgs is specified
+     clArgs=...                  Command line arguments. Ignored if -args/--clArgs is specified
      scrptPath=/.../...          Which ftPostProc to run
      python_bin=/.../...         Which python to run
 
@@ -148,7 +150,7 @@ Regarding file names:
         prefix_datecode_suffix
 
 Command line arguments are:
- -a/--clArgs            command line arguments to pass through to ftArchPostProc. Takes priority
+ -args/--clArgs         command line arguments to pass through to ftArchPostProc. Takes priority
                         over clArgs in the config file. The later is ignored if this argument is specified.
 
  -c/--configFile        (default 'autoExportConfig.ini')
@@ -164,8 +166,10 @@ Command line arguments are:
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, \
                                  description=descrStr, epilog=eplStr)
-parser.add_argument('-a', '--clArgs', default=None, metavar='', \
-                   help='Command line arguments to pass through to ftArchPostProc.')
+parser.add_argument('-args', '--clArgs', default=None, metavar='', \
+                   help='Command line arguments to pass through to ftArchPostProc. \
+Note, due to how arguments are parsed, if a single argument is to be passed (\'-a\' for example) \
+then a space must be prepended, or the argument won\'t be properly passed.')
 parser.add_argument('-c', '--configFile', default='autoExportConfig.ini', metavar='', \
                    help='Config file. Default is autoExportConfig.ini. A list of files \
 may be specified ([\'file1.ini\',\'file2.ini\',...]) if the configuration is \
@@ -187,7 +191,7 @@ args = parser.parse_args()
 # args.verbose          True/False Increase output messaging
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
-
+print(args.clArgs)
 if args.verbose:
     print('**** Begin Processing ****')
     # get start processing time
@@ -346,13 +350,15 @@ if config.has_section('ftArchPostProc'):
     # ftpp clArgs -- command line arguments
     if config.has_option('ftArchPostProc', 'clArgs') and args.clArgs is not None and args.clArgs != '':
         if args.verbose:
-            print('Note: The \'clArgs\' option in the \
-\'ftArchPostProc\' section was found, but will be ignored becuase the command line argument \
--a/--clArgs was specified. Configuration file: \'' + args.configFile + '\'.')
-        ftppClArgs = args.clArgs
+            argStr = config['ftArchPostProc']['clArgs']
+            print('Note: The \'clArgs\' option in the \'ftArchPostProc\' section was found, \n \
+but will be ignored becuase the command line argument -args/--clArgs was specified.\n \
+Command line argument: \'' + args.clArgs + '\'.\nConfiguration file: \'' + args.configFile + '\'.')
+            ftppClArgs = shlex.split(args.clArgs)
+            argStr = argStr + ' <ignored>'
     elif config.has_option('ftArchPostProc', 'clArgs') and (args.clArgs is None or args.clArgs == ''):
         argStr = config['ftArchPostProc']['clArgs']
-        if (argStr is None or argStr == ''): 
+        if (argStr is None or argStr == ''):
             if args.verbose:
                 print('Configuration error: \'clArgs\' option in the \
 \'ftArchPostProc\' section must contain a value. Configuration file: \'' + args.configFile + '\'.')
@@ -364,11 +370,12 @@ if config.has_section('ftArchPostProc'):
             ftppClArgs = shlex.split(argStr)
     elif not config.has_option('ftArchPostProc', 'clArgs') and args.clArgs is not None and args.clArgs != '':
         if args.verbose:
-            print('The command line argument -a/--clArgs was specified: \'' + args.clArgs + '\'.')
-        ftppClArgs = args.clArgs
+            print('The command line argument -args/--clArgs was specified: \'' + args.clArgs + '\'.')
+        ftppClArgs = shlex.split(args.clArgs)
+        argStr = '<not specified>'
     else :
         if args.verbose:
-            print('Configuration error: No arguments specified with the -a/--clArgs command line \
+            print('Configuration error: No arguments specified with the -args/--clArgs command line \
 option, and there is no  \'clArgs\' option in the \'ftArchPostProc\' section in the configuration file: \'' + args.configFile + '\'.')
         quit()
     # ftpp script
@@ -435,7 +442,7 @@ for filename in listFiles(unprocessedPath):
         # Run ftpp in its virtual environment as a subprocess
         # First, create a list of arguments, and then call it
         # Besides the input and output file names, the command line arguments come
-        # from the configuraiton file, and were pulled out into ftppClArgs above.
+        # from the configuraiton file or the command line, and were pulled out into ftppClArgs above.
         # The Popen subprocess call expects a command as a list with the command first
         # followed by arguments, which in this case has the following pattern:
         # python3 ftPostProc.py arg1, arg2 ...
@@ -444,6 +451,7 @@ for filename in listFiles(unprocessedPath):
         ftppArgs.append(ftppExecPath)
         # append the command line arguments from the configuraiton file as list elements.
         ftppArgs.extend(ftppClArgs)
+        print(ftppArgs)
         # Append the input and output file names. Note these are positional arguments in ftpp,
         # so the order is important.
         ftppArgs.append(unprocessedPath + filename)
