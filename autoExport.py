@@ -207,7 +207,6 @@ args = parser.parse_args()
 # args.verbose          True/False Increase output messaging
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
-print(args)
 if args.verbose:
     print('**** Begin Processing ****')
     # get start processing time
@@ -467,7 +466,6 @@ for filename in listFiles(unprocessedPath):
         ftppArgs.append(ftppExecPath)
         # append the command line arguments from the configuraiton file as list elements.
         ftppArgs.extend(ftppClArgs)
-        print(ftppArgs)
         # Append the input and output file names. Note these are positional arguments in ftpp,
         # so the order is important.
         ftppArgs.append(unprocessedPath + filename)
